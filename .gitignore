@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+env/
+venv/
+
+# Data
+data/
+datasets/
+KITTI/
+TUM/
+EuRoC/
+*.png
+*.jpg
+*.bag
+
+# Results
+results/
+outputs/
+trajectories/
+maps/
+*.txt
+*.ply
+
+# Logs
+logs/
+*.log
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+
+# Videos
+videos/
+*.mp4
+*.avi
