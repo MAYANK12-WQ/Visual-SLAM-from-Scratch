@@ -34,19 +34,31 @@ Every algorithm — feature detection, pose estimation, keyframe selection — i
 
 ```mermaid
 flowchart TD
-    A[📷 Image Stream] --> B[Preprocessing\nUndistortion · Grayscale]
-    B --> C[Feature Extraction\nORB Detector · 2000 kp/frame]
-    C --> D[Feature Matching\nBrute-Force + Lowe Ratio Test]
-    D --> E{Enough\nmatches?\n≥ 10}
-    E -- No --> F[⚠️ Skip Frame\nInsufficient data]
-    E -- Yes --> G[Pose Estimation\nEssential Matrix · RANSAC · recoverPose]
-    G --> H{Keyframe\nNeeded?}
-    H -- Inlier ratio < 70%\nor large motion --> I[🔑 New Keyframe\nStore · Update Reference]
-    H -- Small motion --> J[Update Pose\nfrom current reference]
-    I --> K[3D Map Update\nTriangulation of new points]
-    J --> L[Trajectory\nAppend position]
+    A[Image Stream] --> B[Preprocessing
+Undistortion and Grayscale]
+    B --> C[Feature Extraction
+ORB Detector — 2000 keypoints per frame]
+    C --> D[Feature Matching
+Brute-Force + Lowe Ratio Test 0.75]
+    D --> E{Enough matches?
+threshold = 10}
+    E -- No --> F[Skip Frame
+Insufficient feature matches]
+    E -- Yes --> G[Pose Estimation
+Essential Matrix + RANSAC + recoverPose]
+    G --> H{Keyframe Needed?}
+    H -- Inlier ratio below 70pct
+or large motion --> I[New Keyframe
+Store and Update Reference]
+    H -- Small motion --> J[Update Pose
+from current reference]
+    I --> K[3D Map Update
+Triangulation of new map points]
+    J --> L[Trajectory
+Append current position]
     K --> L
-    L --> M[📊 Visualisation\nTrajectory · Keypoints · ATE]
+    L --> M[Visualisation
+Trajectory and Keypoints and ATE]
 
     style A fill:#1e3a5f,color:#fff
     style C fill:#2d6a4f,color:#fff
