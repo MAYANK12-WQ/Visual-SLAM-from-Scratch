@@ -1,0 +1,108 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.10", "3.11"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y libgl1-mesa-glx libglib2.0-0
+
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install opencv-python-headless numpy matplotlib scipy pytest
+
+      - name: Run camera model tests
+        run: python -c "
+import numpy as np, sys
+sys.path.insert(0, '.')
+from utils.camera import PinholeCamera, StereoCamera
+
+cam = PinholeCamera(718.856, 718.856, 607.1928, 185.2157)
+pts3d = np.array([[1., 0., 5.], [0., 1., 5.], [-1., -1., 10.]])
+pts2d = cam.project(pts3d)
+recon = cam.unproject(pts2d, pts3d[:, 2])
+err = np.linalg.norm(recon - pts3d)
+assert err < 1e-6, f'Projection round-trip error too large: {err}'
+print(f'Camera model OK  (round-trip error = {err:.2e})')
+"
+
+      - name: Run SLAM frontend tests
+        run: python -c "
+import numpy as np, sys
+sys.path.insert(0, '.')
+from utils.camera import PinholeCamera
+from slam.frontend import Frontend
+
+cam = Frontend(PinholeCamera(718.856, 718.856, 607.1928, 185.2157))
+img1 = np.random.randint(0, 255, (480, 640), dtype=np.uint8)
+img2 = np.random.randint(0, 255, (480, 640), dtype=np.uint8)
+r1 = cam.process_frame(img1)
+assert r1 is not None and r1['is_keyframe'], 'First frame must be keyframe'
+print('SLAM frontend OK')
+"
+
+      - name: Run benchmark evaluator tests
+        run: python -c "
+import numpy as np, sys, tempfile, os
+sys.path.insert(0, '.')
+from benchmark.evaluate_kitti import (
+    load_trajectory_kitti, align_umeyama, compute_ate, compute_rpe
+)
+
+# Generate synthetic ground truth + noisy estimate
+n = 100
+gt_poses = np.tile(np.eye(4), (n, 1, 1))
+est_poses = gt_poses.copy()
+for i in range(n):
+    gt_poses[i, :3, 3] = [i * 0.1, 0, 0]
+    est_poses[i, :3, 3] = [i * 0.1 + np.random.randn() * 0.01, 0, 0]
+
+ate = compute_ate(gt_poses, est_poses, align=True)
+rpe = compute_rpe(gt_poses, est_poses, delta=1)
+assert ate['rmse'] < 0.1, f'ATE too large on clean data: {ate[\"rmse\"]}'
+print(f'Benchmark evaluator OK  (ATE RMSE = {ate[\"rmse\"]:.5f} m)')
+"
+
+      - name: Lint (flake8 — errors only)
+        run: |
+          pip install flake8
+          flake8 slam/ utils/ benchmark/ scripts/ --max-line-length=120 --select=E9,F63,F7,F82
+
+  generate-plots:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: pip install numpy matplotlib
+      - name: Generate demo plots
+        run: python scripts/generate_demo_plots.py --out docs/images/
+      - name: Upload plot artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: slam-demo-plots
+          path: docs/images/
+          retention-days: 30
